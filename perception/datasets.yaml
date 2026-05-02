@@ -1,0 +1,23 @@
+sources:
+  - workspace: shahed136
+    project: shahed136-detect
+    version: 1
+    note: rendered + bbox + masks
+  - workspace: myws-tckfd
+    project: shahed-136-bvs8o
+    version: 1
+    note: 200 imgs, ships with pretrained model
+  - workspace: rodion-shishkin-tb3cu
+    project: shahed-136_youtube_batch2
+    version: 1
+    note: 29 imgs from youtube
+  - workspace: polina-verzun-lliid
+    project: shahed
+    version: 1
+    note: 195 imgs
+  - workspace: lerrika-vwghl
+    project: shahed-ubivw
+    version: 1
+
+target_class: shahed
+output_format: yolov8

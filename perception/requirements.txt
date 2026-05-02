@@ -1,0 +1,8 @@
+ultralytics>=8.3.0
+roboflow>=1.1.50
+onnx>=1.16.0
+onnxruntime>=1.20.0
+opencv-python>=4.10.0
+pillow>=10.4.0
+pyyaml>=6.0.2
+tqdm>=4.66.0
