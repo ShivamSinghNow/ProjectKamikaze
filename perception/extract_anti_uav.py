@@ -2,7 +2,7 @@
 
 Usage:
     uv run python perception/extract_anti_uav.py \
-        --src data/raw_anti_uav \
+        --src /mnt/ssd/antiuav/raw \
         --dst-rgb data/raw/antiuav__v300_rgb \
         --dst-ir  data/raw/antiuav__v300_ir \
         --stride 10 --val-split 0.15
@@ -17,6 +17,19 @@ from pathlib import Path
 import cv2
 
 CLASS_ID = 0
+
+RGB_VIDEO_NAMES = ("RGB.mp4", "visible.mp4")
+RGB_LABEL_NAMES = ("RGB_label.json", "visible.json")
+IR_VIDEO_NAMES = ("IR.mp4", "infrared.mp4")
+IR_LABEL_NAMES = ("IR_label.json", "infrared.json")
+
+
+def first_existing(root: Path, names: tuple[str, ...]) -> Path:
+    for name in names:
+        candidate = root / name
+        if candidate.exists():
+            return candidate
+    return root / names[0]
 
 
 def process_video(video_path: Path, label_path: Path, out_root: Path, split: str, stride: int) -> int:
@@ -73,16 +86,38 @@ def main() -> None:
     p.add_argument("--val-split", type=float, default=0.15)
     args = p.parse_args()
 
-    seqs = sorted([d for d in args.src.iterdir() if d.is_dir()])
-    random.seed(42)
-    random.shuffle(seqs)
-    cut = int(len(seqs) * (1 - args.val_split))
+    if (args.src / "train").exists() or (args.src / "val").exists():
+        split_roots = (("train", args.src / "train"), ("val", args.src / "val"))
+        seqs = [
+            (split, seq)
+            for split, root in split_roots
+            if root.exists()
+            for seq in sorted(root.iterdir())
+            if seq.is_dir()
+        ]
+    else:
+        dirs = sorted([d for d in args.src.iterdir() if d.is_dir()])
+        random.seed(42)
+        random.shuffle(dirs)
+        cut = int(len(dirs) * (1 - args.val_split))
+        seqs = [("train" if i < cut else "val", seq) for i, seq in enumerate(dirs)]
 
     rgb_total = ir_total = 0
-    for i, seq in enumerate(seqs):
-        split = "train" if i < cut else "val"
-        rgb_total += process_video(seq / "RGB.mp4", seq / "RGB_label.json", args.dst_rgb, split, args.stride)
-        ir_total += process_video(seq / "IR.mp4", seq / "IR_label.json", args.dst_ir, split, args.stride)
+    for i, (split, seq) in enumerate(seqs):
+        rgb_total += process_video(
+            first_existing(seq, RGB_VIDEO_NAMES),
+            first_existing(seq, RGB_LABEL_NAMES),
+            args.dst_rgb,
+            split,
+            args.stride,
+        )
+        ir_total += process_video(
+            first_existing(seq, IR_VIDEO_NAMES),
+            first_existing(seq, IR_LABEL_NAMES),
+            args.dst_ir,
+            split,
+            args.stride,
+        )
         if (i + 1) % 25 == 0:
             print(f"  {i + 1}/{len(seqs)}  rgb={rgb_total} ir={ir_total}")
 

@@ -83,6 +83,9 @@ def file_hash(p: Path) -> str:
 
 
 def gather_modality(slug: str) -> str:
+    lower_slug = slug.lower()
+    if "__v300_ir" in lower_slug or "thermal" in lower_slug or "infrared" in lower_slug:
+        return "ir"
     for src in CFG["sources"]:
         kind = src["type"]
         if kind == "roboflow":
@@ -113,7 +116,7 @@ def main() -> None:
         modality = gather_modality(ds.name)
         per_ds = 0
         # Try standard train/valid/test split, then fall back to flat layout
-        split_dirs = [(ds / s / "images", ds / s / "labels") for s in ("train", "valid", "test")]
+        split_dirs = [(ds / s / "images", ds / s / "labels") for s in ("train", "valid", "val", "test")]
         if not any(d.exists() for d, _ in split_dirs):
             split_dirs = [(ds / "images", ds / "labels")]
         for img_dir, lbl_dir in split_dirs:
