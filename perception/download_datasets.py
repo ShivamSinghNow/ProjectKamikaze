@@ -27,7 +27,6 @@ def slugify(*parts: str) -> str:
 
 
 def pull_roboflow(src: dict, target: Path) -> None:
-    import requests
     from roboflow import Roboflow
 
     api_key = os.environ.get("ROBOFLOW_API_KEY")
@@ -38,13 +37,13 @@ def pull_roboflow(src: dict, target: Path) -> None:
 
     requested = src.get("version", "latest")
     if requested in (None, "latest", "auto"):
-        meta = requests.get(
-            f"https://api.roboflow.com/{src['workspace']}/{src['project']}",
-            params={"api_key": api_key},
-            timeout=30,
-        ).json()
-        vlist = (meta.get("project") or {}).get("versions") or meta.get("versions") or []
-        nums = [int(str(v.get("id", "0/0/0")).rsplit("/", 1)[-1] or 0) for v in vlist]
+        versions = list(project.versions())
+        nums: list[int] = []
+        for v in versions:
+            raw = getattr(v, "version", "") or ""
+            tail = str(raw).rsplit("/", 1)[-1]
+            if tail.isdigit():
+                nums.append(int(tail))
         if not nums:
             raise RuntimeError(f"no versions discovered for {src['workspace']}/{src['project']}")
         version_num = max(nums)

@@ -52,30 +52,31 @@ sources:
     project: shahed-136_youtube_batch2
     modality: rgb
 
-  # Larger candidates — slugs are best-guess from project names; download will skip failures
+  # Additional verified slugs from earlier search results
   - type: roboflow
+    workspace: myws-tckfd
+    project: shahed-136-bvs8o
+    modality: rgb
+    note: 200 imgs by MyWS, ships pretrained model
+
+  - type: roboflow
+    workspace: polina-verzun-lliid
+    project: shahed
+    modality: rgb
+    note: 195 imgs by Polina Verzun
+
+  # Disabled — workspace slugs not verified; would need exact URLs from Roboflow Universe search
+  - type: roboflow
+    enabled: false
     workspace: maross
     project: shahed_master_final
-    modality: rgb
-    note: 20K imgs (verify slug)
+    note: 20K imgs (DISABLED - slug unverified)
 
   - type: roboflow
+    enabled: false
     workspace: erdem-gursoy
     project: hunter
-    modality: rgb
-    note: 17K imgs (verify slug)
-
-  - type: roboflow
-    workspace: dronedetect-mix-2025
-    project: dronedetect_mix_2025
-    modality: rgb
-    note: 11K imgs (verify slug)
-
-  - type: roboflow
-    workspace: combat-drones-demo
-    project: combat-drones-demo
-    modality: rgb
-    note: 4K imgs Shahed136 + orlan (verify slug)
+    note: 17K imgs (DISABLED - slug unverified)
 
   # ------------------------------------------------------------ Kaggle (CC0 synthetic)
   - type: kaggle
