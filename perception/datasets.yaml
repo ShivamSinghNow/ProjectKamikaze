@@ -16,6 +16,15 @@ class_aliases:
   - "Shahed 136"
   - shahed-137
   - shahed137
+  # common misspellings + variants found in real datasets
+  - shashed
+  - shaheed
+  - shaed
+  - shaheed-136
+  - geran
+  - geran-2
+  - kamikaze-drone
+  - loitering-munition
 
 sources:
   # ------------------------------------------------------------ Roboflow Universe
