@@ -1,0 +1,24 @@
+[project]
+name = "kamikaze-workspace"
+version = "0.1.0"
+description = "Counter-Shahed swarm drone hackathon — workspace root"
+requires-python = ">=3.11,<3.12"
+
+[tool.uv.workspace]
+members = [
+    "packages/kamikaze_common",
+    "services/drone-agent",
+    "services/control-plane",
+    "training",
+]
+
+[tool.uv.sources]
+kamikaze-common = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

@@ -1,0 +1,120 @@
+# Kamikaze swarm runtime.
+#
+# 5 drone-agent containers + 1 control-plane + 1 redis + 1 sim service on a
+# private bridge network. Drones are explicit (drone-1..drone-5) so gossip
+# mesh peers can resolve each other by stable DNS hostname. The sim service
+# (KAM-8) drives PyBullet physics centrally; drones subscribe to world:state
+# and publish drone:{id}:cmd back to the sim.
+
+x-drone-base: &drone-base
+  build:
+    context: .
+    dockerfile: services/drone-agent/Dockerfile
+  depends_on:
+    control-plane:
+      condition: service_healthy
+    redis:
+      condition: service_started
+    sim:
+      condition: service_started
+  networks:
+    - kamikaze-net
+  volumes:
+    - ./models:/models:ro
+  restart: unless-stopped
+  environment: &drone-env
+    CONTROL_PLANE_URL: http://control-plane:8000
+    REDIS_URL: redis://redis:6379
+    PEERS: drone-1,drone-2,drone-3,drone-4,drone-5
+    POLICY: ${POLICY:-noop}            # noop | ppo | pronav
+    PPO_CHECKPOINT: /models/intercept_ppo.zip
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    TICK_HZ: "30.0"                    # match SIM_TICK_HZ for stable hover
+
+services:
+  redis:
+    image: redis:7-alpine
+    networks:
+      - kamikaze-net
+    restart: unless-stopped
+
+  control-plane:
+    build:
+      context: .
+      dockerfile: services/control-plane/Dockerfile
+    ports:
+      - "8000:8000"
+    networks:
+      - kamikaze-net
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 2s
+      timeout: 1s
+      retries: 10
+      start_period: 3s
+
+  sim:
+    build:
+      context: .
+      dockerfile: services/sim/Dockerfile
+    networks:
+      - kamikaze-net
+    depends_on:
+      - redis
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SIM_TICK_HZ: "30"
+
+  drone-1:
+    <<: *drone-base
+    hostname: drone-1
+    container_name: drone-1
+    environment:
+      <<: *drone-env
+      DRONE_ID: drone-1
+      ROLE: perimeter
+
+  drone-2:
+    <<: *drone-base
+    hostname: drone-2
+    container_name: drone-2
+    environment:
+      <<: *drone-env
+      DRONE_ID: drone-2
+      ROLE: perimeter
+
+  drone-3:
+    <<: *drone-base
+    hostname: drone-3
+    container_name: drone-3
+    environment:
+      <<: *drone-env
+      DRONE_ID: drone-3
+      ROLE: perimeter
+
+  drone-4:
+    <<: *drone-base
+    hostname: drone-4
+    container_name: drone-4
+    environment:
+      <<: *drone-env
+      DRONE_ID: drone-4
+      ROLE: perimeter
+
+  drone-5:
+    <<: *drone-base
+    hostname: drone-5
+    container_name: drone-5
+    environment:
+      <<: *drone-env
+      DRONE_ID: drone-5
+      ROLE: spotter
+
+networks:
+  kamikaze-net:
+    driver: bridge

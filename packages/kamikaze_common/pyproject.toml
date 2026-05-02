@@ -1,0 +1,32 @@
+[project]
+name = "kamikaze-common"
+version = "0.1.0"
+description = "Shared schemas, logging, and gym envs for ProjectKamikaze"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "pydantic>=2.6,<3",
+    "msgpack>=1.0",
+    "redis>=5.0",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# Pulled in by the sim service and the training package. Heavy (pybullet
+# bundles ~150MB of native libs) so the drone-agent image doesn't pay for
+# them — drone-agent gets state via Redis, not by importing pybullet.
+envs = [
+    "gymnasium>=0.29",
+    "pybullet>=3.2.5",
+    "gym-pybullet-drones @ git+https://github.com/utiasDSL/gym-pybullet-drones@fb26cc60db558ff806566409b9a84e1e2eeef9af",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+# Required so the `envs` extra can pin gym-pybullet-drones via git URL.
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kamikaze_common"]
