@@ -1,5 +1,7 @@
 ultralytics>=8.3.0
 roboflow>=1.1.50
+kagglehub>=0.3.0
+huggingface-hub>=0.26.0
 onnx>=1.16.0
 onnxruntime>=1.20.0
 opencv-python>=4.10.0

@@ -1,37 +1,109 @@
-"""Download all Shahed datasets listed in datasets.yaml into data/raw/."""
+"""Pull every enabled source in datasets.yaml into data/raw/<slug>/.
+
+Handles Roboflow, Kaggle, and Hugging Face. Failures are logged and skipped so
+one broken slug doesn't block the rest.
+
+Env vars:
+    ROBOFLOW_API_KEY   required for Roboflow sources
+    KAGGLE_USERNAME    } either both set, or ~/.config/kaggle/kaggle.json present
+    KAGGLE_KEY         }
+    HF_TOKEN           optional, only needed for gated HF repos
+"""
+from __future__ import annotations
+
 import os
 import sys
+import traceback
 from pathlib import Path
 
 import yaml
-from roboflow import Roboflow
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
 
 
-def main():
+def slugify(*parts: str) -> str:
+    return "__".join(p.replace("/", "_") for p in parts if p)
+
+
+def pull_roboflow(src: dict, target: Path) -> None:
+    from roboflow import Roboflow
+
     api_key = os.environ.get("ROBOFLOW_API_KEY")
     if not api_key:
-        sys.exit("ROBOFLOW_API_KEY not set. Get one at https://app.roboflow.com/settings/api")
-
-    cfg = yaml.safe_load((Path(__file__).parent / "datasets.yaml").read_text())
+        raise RuntimeError("ROBOFLOW_API_KEY not set")
     rf = Roboflow(api_key=api_key)
+    project = rf.workspace(src["workspace"]).project(src["project"])
+    project.version(int(src.get("version", 1))).download(src.get("format", "yolov8"), location=str(target))
+
+
+def pull_kaggle(src: dict, target: Path) -> None:
+    import kagglehub
+
+    path = kagglehub.dataset_download(src["slug"], force_download=False)
+    # kagglehub puts files in its cache; symlink/copy into target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        return
+    target.symlink_to(path)
+
+
+def pull_huggingface(src: dict, target: Path) -> None:
+    from huggingface_hub import snapshot_download
+
+    snapshot_download(
+        repo_id=src["repo"],
+        repo_type=src.get("repo_type", "dataset"),
+        local_dir=str(target),
+        token=os.environ.get("HF_TOKEN"),
+    )
+
+
+HANDLERS = {
+    "roboflow": pull_roboflow,
+    "kaggle": pull_kaggle,
+    "huggingface": pull_huggingface,
+}
+
+
+def main() -> int:
+    cfg = yaml.safe_load((Path(__file__).parent / "datasets.yaml").read_text())
     RAW.mkdir(parents=True, exist_ok=True)
 
+    summary: list[tuple[str, str, str]] = []  # (status, slug, msg)
     for src in cfg["sources"]:
-        slug = f"{src['workspace']}__{src['project']}"
-        target = RAW / slug
-        if target.exists():
-            print(f"skip  {slug}  (already downloaded)")
+        if src.get("enabled") is False:
             continue
-        print(f"pull  {slug}")
+        kind = src["type"]
+        if kind == "roboflow":
+            slug = slugify(kind, src["workspace"], src["project"], f"v{src.get('version', 1)}")
+        elif kind == "kaggle":
+            slug = slugify(kind, src["slug"])
+        else:
+            slug = slugify(kind, src["repo"])
+        target = RAW / slug
+
+        if target.exists() and any(target.iterdir()):
+            print(f"skip   {slug}  (already present)")
+            summary.append(("skip", slug, ""))
+            continue
+
+        print(f"pull   {slug}  [{kind}]")
         try:
-            project = rf.workspace(src["workspace"]).project(src["project"])
-            project.version(src["version"]).download(cfg["output_format"], location=str(target))
-        except Exception as exc:
+            HANDLERS[kind](src, target)
+            summary.append(("ok", slug, ""))
+        except Exception as exc:  # noqa: BLE001
             print(f"  FAILED: {exc}")
+            traceback.print_exc(limit=1)
+            summary.append(("fail", slug, str(exc)))
+
+    print("\n=== summary ===")
+    for status, slug, msg in summary:
+        marker = {"ok": "✓", "skip": "·", "fail": "✗"}[status]
+        print(f"  {marker}  {slug}  {msg}")
+    failed = sum(1 for s, *_ in summary if s == "fail")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
