@@ -6,6 +6,9 @@ requires-python = ">=3.11,<3.12"
 dependencies = [
     "httpx>=0.27",
     "numpy>=1.26",
+    # redis + msgpack are required since KAM-8 — sim_client subscribes to
+    # world:state and publishes drone:{id}:cmd. kamikaze-common already
+    # pulls them transitively but listing here is explicit.
     "kamikaze-common",
 ]
 
@@ -22,9 +25,9 @@ ppo = [
 onnx = [
     "onnxruntime>=1.17",
 ]
-# KAM-11: Redis-backed gossip mesh (websockets fallback also possible)
+# KAM-11: websockets gossip mesh fallback. Redis is already required for
+# the sim dataplane (KAM-8) so KAM-11 only needs to pick a transport.
 mesh = [
-    "redis>=5.0",
     "websockets>=12.0",
 ]
 

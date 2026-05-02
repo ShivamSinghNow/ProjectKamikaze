@@ -1,8 +1,10 @@
-# Kamikaze swarm runtime — KAM-5 scaffold.
+# Kamikaze swarm runtime.
 #
-# 5 drone-agent containers + 1 control-plane + 1 redis on a private bridge
-# network. Drones are explicit (drone-1..drone-5) so gossip mesh peers can
-# resolve each other by stable DNS hostname.
+# 5 drone-agent containers + 1 control-plane + 1 redis + 1 sim service on a
+# private bridge network. Drones are explicit (drone-1..drone-5) so gossip
+# mesh peers can resolve each other by stable DNS hostname. The sim service
+# (KAM-8) drives PyBullet physics centrally; drones subscribe to world:state
+# and publish drone:{id}:cmd back to the sim.
 
 x-drone-base: &drone-base
   build:
@@ -11,6 +13,7 @@ x-drone-base: &drone-base
   depends_on:
     - control-plane
     - redis
+    - sim
   networks:
     - kamikaze-net
   volumes:
@@ -23,7 +26,7 @@ x-drone-base: &drone-base
     POLICY: ${POLICY:-noop}            # noop | ppo | pronav
     PPO_CHECKPOINT: /models/intercept_ppo.zip
     LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    TICK_HZ: "1.0"
+    TICK_HZ: "30.0"                    # match SIM_TICK_HZ for stable hover
 
 services:
   redis:
@@ -44,6 +47,20 @@ services:
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
+  sim:
+    build:
+      context: .
+      dockerfile: services/sim/Dockerfile
+    networks:
+      - kamikaze-net
+    depends_on:
+      - redis
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SIM_TICK_HZ: "30"
+
   drone-1:
     <<: *drone-base
     hostname: drone-1
@@ -51,6 +68,7 @@ services:
     environment:
       <<: *drone-env
       DRONE_ID: drone-1
+      ROLE: perimeter
 
   drone-2:
     <<: *drone-base
@@ -59,6 +77,7 @@ services:
     environment:
       <<: *drone-env
       DRONE_ID: drone-2
+      ROLE: perimeter
 
   drone-3:
     <<: *drone-base
@@ -67,6 +86,7 @@ services:
     environment:
       <<: *drone-env
       DRONE_ID: drone-3
+      ROLE: perimeter
 
   drone-4:
     <<: *drone-base
@@ -75,6 +95,7 @@ services:
     environment:
       <<: *drone-env
       DRONE_ID: drone-4
+      ROLE: perimeter
 
   drone-5:
     <<: *drone-base
@@ -83,6 +104,7 @@ services:
     environment:
       <<: *drone-env
       DRONE_ID: drone-5
+      ROLE: spotter
 
 networks:
   kamikaze-net:
