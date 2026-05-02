@@ -1,0 +1,89 @@
+# Kamikaze swarm runtime — KAM-5 scaffold.
+#
+# 5 drone-agent containers + 1 control-plane + 1 redis on a private bridge
+# network. Drones are explicit (drone-1..drone-5) so gossip mesh peers can
+# resolve each other by stable DNS hostname.
+
+x-drone-base: &drone-base
+  build:
+    context: .
+    dockerfile: services/drone-agent/Dockerfile
+  depends_on:
+    - control-plane
+    - redis
+  networks:
+    - kamikaze-net
+  volumes:
+    - ./models:/models:ro
+  restart: unless-stopped
+  environment: &drone-env
+    CONTROL_PLANE_URL: http://control-plane:8000
+    REDIS_URL: redis://redis:6379
+    PEERS: drone-1,drone-2,drone-3,drone-4,drone-5
+    POLICY: ${POLICY:-noop}            # noop | ppo | pronav
+    PPO_CHECKPOINT: /models/intercept_ppo.zip
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    TICK_HZ: "1.0"
+
+services:
+  redis:
+    image: redis:7-alpine
+    networks:
+      - kamikaze-net
+    restart: unless-stopped
+
+  control-plane:
+    build:
+      context: .
+      dockerfile: services/control-plane/Dockerfile
+    ports:
+      - "8000:8000"
+    networks:
+      - kamikaze-net
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+  drone-1:
+    <<: *drone-base
+    hostname: drone-1
+    container_name: drone-1
+    environment:
+      <<: *drone-env
+      DRONE_ID: drone-1
+
+  drone-2:
+    <<: *drone-base
+    hostname: drone-2
+    container_name: drone-2
+    environment:
+      <<: *drone-env
+      DRONE_ID: drone-2
+
+  drone-3:
+    <<: *drone-base
+    hostname: drone-3
+    container_name: drone-3
+    environment:
+      <<: *drone-env
+      DRONE_ID: drone-3
+
+  drone-4:
+    <<: *drone-base
+    hostname: drone-4
+    container_name: drone-4
+    environment:
+      <<: *drone-env
+      DRONE_ID: drone-4
+
+  drone-5:
+    <<: *drone-base
+    hostname: drone-5
+    container_name: drone-5
+    environment:
+      <<: *drone-env
+      DRONE_ID: drone-5
+
+networks:
+  kamikaze-net:
+    driver: bridge
