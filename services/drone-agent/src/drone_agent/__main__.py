@@ -46,15 +46,41 @@ def _register(cfg: cfg_mod.DroneConfig, client: httpx.Client, log) -> list[str]:
     raise RuntimeError(f"could not register with control-plane: {last_err}")
 
 
-def _send_heartbeat(client: httpx.Client, hb: Heartbeat, log) -> bool:
-    """Returns False if the control-plane evicted us (we need to re-register)."""
+_HB_FORCE_REREGISTER_AFTER = 5  # consecutive failures
+_HB_LOG_EVERY_N = 30  # one WARN per ~30 ticks during outage instead of every tick
+
+
+class _HeartbeatState:
+    """Bookkeeping for circuit-breaker behavior on /heartbeat outages."""
+
+    def __init__(self) -> None:
+        self.fail_count = 0
+
+
+def _send_heartbeat(
+    client: httpx.Client, hb: Heartbeat, log, state: _HeartbeatState
+) -> bool:
+    """Returns False when we should re-register (CP evicted us OR we've
+    missed too many heartbeats in a row to trust our own roster entry)."""
     try:
         r = client.post("/heartbeat", json=hb.model_dump(), timeout=2.0)
         r.raise_for_status()
+        if state.fail_count > 0:
+            log.info("heartbeat recovered after %d failures", state.fail_count)
+        state.fail_count = 0
         return bool(r.json().get("known", True))
     except Exception as exc:
-        log.warning("heartbeat post failed: %s", exc)
-        return True  # don't trigger re-register on transient network errors
+        state.fail_count += 1
+        # Throttle the warn flood: log on first failure, then every 30 ticks.
+        if state.fail_count == 1 or state.fail_count % _HB_LOG_EVERY_N == 0:
+            log.warning(
+                "heartbeat post failed (%d in a row): %s",
+                state.fail_count,
+                exc,
+            )
+        # After N misses, force a re-register attempt so we self-heal even
+        # if the control-plane comes back up clean and never returns known=False.
+        return state.fail_count < _HB_FORCE_REREGISTER_AFTER
 
 
 def main() -> int:
@@ -69,13 +95,25 @@ def main() -> int:
     )
 
     policy = build_policy(cfg)
-    log.info("policy=%s ready (%s)", cfg.policy, policy.__class__.__name__)
+    actual_cls = policy.__class__.__name__
+    expected_cls = {
+        "noop": "NoOpPolicy",
+        "ppo": "PPOPolicy",
+        "pronav": "ProNavMlpPolicy",
+    }.get(cfg.policy)
+    if expected_cls is not None and actual_cls != expected_cls:
+        log.warning(
+            "POLICY=%s requested but running %s (FALLBACK)", cfg.policy, actual_cls
+        )
+    else:
+        log.info("policy=%s ready (%s)", cfg.policy, actual_cls)
 
     sim_client = SimClient(cfg.redis_url, cfg.drone_id)
     sim_client.start()
 
     cp_client = httpx.Client(base_url=cfg.control_plane_url)
     _register(cfg, cp_client, log)
+    hb_state = _HeartbeatState()
 
     # Don't block waiting for the first world:state — heartbeats must keep
     # flowing or control-plane evicts us at 10s. The loop tolerates state=None.
@@ -92,9 +130,15 @@ def main() -> int:
         hb = Heartbeat(drone_id=cfg.drone_id, t=t, detection=det)
         mesh_stub.broadcast(hb)
 
-        if not _send_heartbeat(cp_client, hb, log):
-            log.warning("control-plane evicted us — re-registering")
+        if not _send_heartbeat(cp_client, hb, log, hb_state):
+            reason = (
+                f"{hb_state.fail_count} consecutive heartbeat failures"
+                if hb_state.fail_count >= _HB_FORCE_REREGISTER_AFTER
+                else "control-plane evicted us"
+            )
+            log.warning("re-registering (%s)", reason)
             _register(cfg, cp_client, log)
+            hb_state.fail_count = 0
 
         if state is not None:
             drone_state = np.concatenate(

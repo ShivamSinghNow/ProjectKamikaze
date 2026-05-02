@@ -11,9 +11,12 @@ x-drone-base: &drone-base
     context: .
     dockerfile: services/drone-agent/Dockerfile
   depends_on:
-    - control-plane
-    - redis
-    - sim
+    control-plane:
+      condition: service_healthy
+    redis:
+      condition: service_started
+    sim:
+      condition: service_started
   networks:
     - kamikaze-net
   volumes:
@@ -46,6 +49,12 @@ services:
     restart: unless-stopped
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 2s
+      timeout: 1s
+      retries: 10
+      start_period: 3s
 
   sim:
     build:

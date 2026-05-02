@@ -2,8 +2,15 @@
 `.predict(obs)` behind the Policy Protocol.
 
 KAM-5 ships this as a stub: if stable-baselines3 isn't installed OR the
-checkpoint doesn't exist, the policy registry catches the exception and
-falls back to NoOpPolicy. The drone always boots.
+checkpoint doesn't exist, the policy registry catches the exception in
+__init__ and falls back to NoOpPolicy.
+
+CONTRACT FOR KAM-9: replace `act()` to assemble the real obs vector from
+drone_state + obs.track per InterceptAviary's observation layout, and to
+translate the model's velocity-setpoint action through DSLPIDControl into
+4 motor RPMs. The placeholder below intentionally hovers (not crashes) on
+shape mismatches so the demo doesn't crash-loop if KAM-9 ships a checkpoint
+without updating this method.
 """
 
 from __future__ import annotations
@@ -13,6 +20,7 @@ from typing import Any
 
 import numpy as np
 
+from drone_agent.policies.noop import _HOVER_RPM
 from drone_agent.policy import MotorCmds, Observation
 
 
@@ -29,14 +37,28 @@ class PPOPolicy:
 
         self._model: Any = PPO.load(checkpoint_path)
         self._ckpt = checkpoint_path
+        self._warned = False
 
     def act(self, obs: Observation, dt: float) -> MotorCmds:  # noqa: ARG002
-        # KAM-9: assemble model_obs from drone_state + track per InterceptAviary's
-        # observation layout, then translate `action` (velocity setpoint) through
-        # DSLPIDControl into 4-RPM motor cmds.
-        action, _ = self._model.predict(obs.drone_state, deterministic=True)
-        # Placeholder: pretend `action` is already RPMs. KAM-9 replaces this.
-        return np.asarray(action, dtype=np.float32).reshape(4)
+        # Guard: until KAM-9 wires obs/action into InterceptAviary's actual
+        # shapes, predict() and reshape() will both raise on shape mismatch.
+        # Crash-looping here with `restart: unless-stopped` would kill the
+        # demo. Hover instead, and warn ONCE so the operator notices.
+        try:
+            action, _ = self._model.predict(obs.drone_state, deterministic=True)
+            return np.asarray(action, dtype=np.float32).reshape(4)
+        except Exception as exc:
+            if not self._warned:
+                from kamikaze_common.logging import get_logger
+
+                get_logger("ppo").warning(
+                    "PPOPolicy.act failed (%s) — hovering until KAM-9 wires "
+                    "obs/action shapes. ckpt=%s",
+                    exc,
+                    self._ckpt,
+                )
+                self._warned = True
+            return np.full((4,), _HOVER_RPM, dtype=np.float32)
 
     def reset(self) -> None:
-        pass
+        self._warned = False

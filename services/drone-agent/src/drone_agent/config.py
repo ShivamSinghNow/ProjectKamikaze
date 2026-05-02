@@ -22,7 +22,10 @@ class DroneConfig:
 def load() -> DroneConfig:
     drone_id = os.environ.get("DRONE_ID", "drone-?")
     peers_raw = os.environ.get("PEERS", drone_id)
-    peers = [p.strip() for p in peers_raw.split(",") if p.strip()]
+    # Exclude self — compose passes the same PEERS list to every drone, and
+    # KAM-11's gossip mesh would otherwise broadcast to self / double-count
+    # own detections during fusion.
+    peers = [p.strip() for p in peers_raw.split(",") if p.strip() and p.strip() != drone_id]
 
     return DroneConfig(
         drone_id=drone_id,
