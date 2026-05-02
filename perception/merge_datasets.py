@@ -146,9 +146,21 @@ def main() -> None:
     if not rows:
         raise SystemExit("no usable images found")
 
-    rows.sort(key=lambda r: (r[2], r[0].name))
-    cut = int(len(rows) * SPLIT_RATIO)
-    splits = {"train": rows[:cut], "val": rows[cut:]}
+    by_source_rows: dict[str, list[tuple[Path, str, str, str]]] = defaultdict(list)
+    for row in rows:
+        by_source_rows[row[2]].append(row)
+
+    splits: dict[str, list[tuple[Path, str, str, str]]] = {"train": [], "val": []}
+    for source in sorted(by_source_rows):
+        source_rows = sorted(by_source_rows[source], key=lambda r: r[0].name)
+        cut = int(len(source_rows) * SPLIT_RATIO)
+        if len(source_rows) > 1:
+            cut = max(1, min(cut, len(source_rows) - 1))
+        splits["train"].extend(source_rows[:cut])
+        splits["val"].extend(source_rows[cut:])
+
+    for split in splits:
+        splits[split].sort(key=lambda r: (r[2], r[0].name))
 
     print(f"\ntotal: {len(rows)}  (train {len(splits['train'])} / val {len(splits['val'])})")
     by_modality = Counter(r[3] for r in rows)
