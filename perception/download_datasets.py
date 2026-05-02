@@ -27,6 +27,7 @@ def slugify(*parts: str) -> str:
 
 
 def pull_roboflow(src: dict, target: Path) -> None:
+    import requests
     from roboflow import Roboflow
 
     api_key = os.environ.get("ROBOFLOW_API_KEY")
@@ -34,7 +35,25 @@ def pull_roboflow(src: dict, target: Path) -> None:
         raise RuntimeError("ROBOFLOW_API_KEY not set")
     rf = Roboflow(api_key=api_key)
     project = rf.workspace(src["workspace"]).project(src["project"])
-    project.version(int(src.get("version", 1))).download(src.get("format", "yolov8"), location=str(target))
+
+    requested = src.get("version", "latest")
+    if requested in (None, "latest", "auto"):
+        meta = requests.get(
+            f"https://api.roboflow.com/{src['workspace']}/{src['project']}",
+            params={"api_key": api_key},
+            timeout=30,
+        ).json()
+        vlist = (meta.get("project") or {}).get("versions") or meta.get("versions") or []
+        nums = [int(str(v.get("id", "0/0/0")).rsplit("/", 1)[-1] or 0) for v in vlist]
+        if not nums:
+            raise RuntimeError(f"no versions discovered for {src['workspace']}/{src['project']}")
+        version_num = max(nums)
+        print(f"  -> latest version v{version_num}")
+    else:
+        version_num = int(requested)
+
+    version = project.version(version_num)
+    version.download(src.get("format", "yolov8"), location=str(target))
 
 
 def pull_kaggle(src: dict, target: Path) -> None:
