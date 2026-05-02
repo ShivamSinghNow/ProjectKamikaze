@@ -111,10 +111,12 @@ def main() -> None:
 
         modality = gather_modality(ds.name)
         per_ds = 0
-        for split in ("train", "valid", "test"):
-            img_dir = ds / split / "images"
-            lbl_dir = ds / split / "labels"
-            if not img_dir.exists():
+        # Try standard train/valid/test split, then fall back to flat layout
+        split_dirs = [(ds / s / "images", ds / s / "labels") for s in ("train", "valid", "test")]
+        if not any(d.exists() for d, _ in split_dirs):
+            split_dirs = [(ds / "images", ds / "labels")]
+        for img_dir, lbl_dir in split_dirs:
+            if not img_dir.exists() or not lbl_dir.exists():
                 continue
             for img in img_dir.iterdir():
                 if img.suffix.lower() not in {".jpg", ".jpeg", ".png", ".bmp"}:

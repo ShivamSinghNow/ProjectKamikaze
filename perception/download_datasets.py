@@ -58,12 +58,15 @@ def pull_roboflow(src: dict, target: Path) -> None:
 def pull_kaggle(src: dict, target: Path) -> None:
     import kagglehub
 
-    path = kagglehub.dataset_download(src["slug"], force_download=False)
-    # kagglehub puts files in its cache; symlink/copy into target
+    cached = Path(kagglehub.dataset_download(src["slug"], force_download=False))
+    # kagglehub puts files in cache. Point target at the deepest dir with images+labels.
+    candidates = [cached, cached / "dataset", cached / "data"]
+    candidates += [p for p in cached.glob("*") if p.is_dir()]
+    inner = next((p for p in candidates if (p / "images").exists() and (p / "labels").exists()), cached)
     target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists():
-        return
-    target.symlink_to(path)
+    if target.exists() or target.is_symlink():
+        target.unlink()
+    target.symlink_to(inner)
 
 
 def pull_huggingface(src: dict, target: Path) -> None:
