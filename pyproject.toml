@@ -17,6 +17,7 @@ dependencies = [
     "tqdm>=4.66",
     "huggingface-hub>=0.26",
     "kagglehub>=1.0.1",
+    "gradio>=6.14.0",
 ]
 
 [tool.uv.sources]

@@ -88,10 +88,18 @@ sources:
     note: 17K imgs (DISABLED - slug unverified)
 
   # ------------------------------------------------------------ Kaggle (CC0 synthetic)
+  # DISABLED — labels Mavic-3, Orlan, Lancet, Granat, etc. as same class as Shahed.
+  # Caused massive false positives on cars/bikes/cards (overgeneralized "drone-ish" silhouettes).
   - type: kaggle
+    enabled: false
     slug: banderastepan/drone-detection
     modality: rgb
-    note: 9K synthetic (Blender), 4.4 GB, single-class YOLO
+    note: 9K synthetic single-class — DISABLED, mixes shahed with mavic/orlan/lancet/etc
+
+  # ------------------------------------------------------------ Negative samples (NO shahed)
+  # Already on disk at data/raw/backgrounds__coco — 1000 random COCO val images
+  # with empty .txt labels = explicit "no shahed in this image" examples.
+  # No download_datasets.py source needed (manually populated).
 
   # ------------------------------------------------------------ Hugging Face
   - type: huggingface

@@ -104,8 +104,9 @@ def main() -> None:
     rows: list[tuple[Path, str, str, str]] = []  # (img, label_text, slug, modality)
 
     for ds in sorted(p for p in RAW.iterdir() if p.is_dir()):
+        is_background = ds.name.startswith("backgrounds__")
         src_map = find_class_map(ds)
-        if not src_map:
+        if not src_map and not is_background:
             print(f"!  {ds.name}: no class map; assume single class 0=shahed")
             src_map = {0: CLASS_NAME}
 
@@ -124,16 +125,20 @@ def main() -> None:
                 lbl = lbl_dir / (img.stem + ".txt")
                 if not lbl.exists():
                     continue
-                relabeled = relabel(lbl.read_text(), src_map)
-                if not relabeled.strip():
-                    continue  # no shahed boxes survived remap
+                if is_background:
+                    relabeled = ""  # explicit negative — empty label
+                else:
+                    relabeled = relabel(lbl.read_text(), src_map)
+                    if not relabeled.strip():
+                        continue  # no shahed boxes survived remap
                 h = file_hash(img)
                 if h in seen:
                     continue
                 seen.add(h)
                 rows.append((img, relabeled, ds.name, modality))
                 per_ds += 1
-        print(f"  {ds.name}: {per_ds:>5} kept  ({modality})")
+        kind = "bg" if is_background else modality
+        print(f"  {ds.name}: {per_ds:>5} kept  ({kind})")
 
     if not rows:
         raise SystemExit("no usable images found")
