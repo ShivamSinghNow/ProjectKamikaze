@@ -1,6 +1,3 @@
-# Source datasets. Anything matching `class_aliases` gets remapped to class 0 (shahed).
-# Set `enabled: false` to skip a source. `modality` is rgb|ir.
-
 target_class: shahed
 output_format: yolov8
 
@@ -16,100 +13,34 @@ class_aliases:
   - "Shahed 136"
   - shahed-137
   - shahed137
-  # common misspellings + variants found in real datasets
   - shashed
   - shaheed
-  - shaed
-  - shaheed-136
   - geran
   - geran-2
   - kamikaze-drone
   - loitering-munition
+  - drone
+  - uav
+  - UAV
+  - quadcopter
 
 sources:
-  # ------------------------------------------------------------ Roboflow Universe
-  # All versions default to "latest" — script discovers the highest version via REST API
-  - type: roboflow
-    workspace: shahed136
-    project: shahed136-detect
-    modality: rgb
+  # ---------- RGB real Shahed ----------
+  - { type: roboflow, workspace: lerrika-vwghl,            project: shahed-ubivw,                        modality: rgb }
+  - { type: roboflow, workspace: myws-tckfd,               project: shahed-136-bvs8o,                    modality: rgb }
+  - { type: roboflow, workspace: polina-verzun-lliid,      project: shahed,                              modality: rgb }
+  - { type: roboflow, workspace: rodion-shishkin-tb3cu,    project: shahed-136_youtube_batch2,           modality: rgb }
 
-  - type: roboflow
-    workspace: e7
-    project: shahed
-    modality: rgb
-    note: 7.6K, includes bird/notshahed negatives — good for false-positive
+  # ---------- Thermal/IR drones ----------
+  - { type: roboflow, workspace: new-workspace-at15m,      project: thermal_drone_dataset,               modality: ir }
+  - { type: roboflow, workspace: infrared-imaging-based-drone-detection, project: infrared-imaging-based-drone-detection, modality: ir }
+  - { type: roboflow, workspace: drone-archive,            project: drone-thermal-model,                 modality: ir }
+  - { type: roboflow, workspace: yolov8-toucz,             project: uav-thermal-image-dataset,           modality: ir }
 
-  - type: roboflow
-    workspace: sinak
-    project: shahed
-    modality: rgb
-    note: 3.3K with person + shahed
+  # ---------- Anti-UAV (manually staged after frame extraction, see Step 4) ----------
+  # Frames will be placed in data/raw/antiuav__v300_rgb/{train|val}/{images,labels}
+  # and data/raw/antiuav__v300_ir/{train|val}/{images,labels}.
+  # No download_datasets entry needed; merge_datasets.py picks them up automatically.
 
-  - type: roboflow
-    workspace: lerrika
-    project: shahed
-    modality: rgb
-
-  - type: roboflow
-    workspace: lerrika-vwghl
-    project: shahed-ubivw
-    modality: rgb
-
-  - type: roboflow
-    workspace: rodion-shishkin-tb3cu
-    project: shahed-136_youtube_batch2
-    modality: rgb
-
-  # Additional verified slugs from earlier search results
-  - type: roboflow
-    workspace: myws-tckfd
-    project: shahed-136-bvs8o
-    modality: rgb
-    note: 200 imgs by MyWS, ships pretrained model
-
-  - type: roboflow
-    workspace: polina-verzun-lliid
-    project: shahed
-    modality: rgb
-    note: 195 imgs by Polina Verzun
-
-  # Disabled — workspace slugs not verified; would need exact URLs from Roboflow Universe search
-  - type: roboflow
-    enabled: false
-    workspace: maross
-    project: shahed_master_final
-    note: 20K imgs (DISABLED - slug unverified)
-
-  - type: roboflow
-    enabled: false
-    workspace: erdem-gursoy
-    project: hunter
-    note: 17K imgs (DISABLED - slug unverified)
-
-  # ------------------------------------------------------------ Kaggle (CC0 synthetic)
-  # DISABLED — labels Mavic-3, Orlan, Lancet, Granat, etc. as same class as Shahed.
-  # Caused massive false positives on cars/bikes/cards (overgeneralized "drone-ish" silhouettes).
-  - type: kaggle
-    enabled: false
-    slug: banderastepan/drone-detection
-    modality: rgb
-    note: 9K synthetic single-class — DISABLED, mixes shahed with mavic/orlan/lancet/etc
-
-  # ------------------------------------------------------------ Negative samples (NO shahed)
-  # Already on disk at data/raw/backgrounds__coco — 1000 random COCO val images
-  # with empty .txt labels = explicit "no shahed in this image" examples.
-  # No download_datasets.py source needed (manually populated).
-
-  # ------------------------------------------------------------ Hugging Face
-  - type: huggingface
-    repo: 187DEF-org/reSynth2-Bench-T1
-    repo_type: dataset
-    modality: ir
-    note: thermal/IR shahed, 1-10K imgs, CC-BY-NC-ND-4.0
-
-  - type: huggingface
-    repo: shng2025/EDTH-Warsaw-shahed136-detector
-    repo_type: model
-    modality: rgb
-    note: model repo with ~8K labeled imgs bundled
+  # ---------- Disabled: poisoned synthetic ----------
+  - { type: kaggle, enabled: false, slug: banderastepan/drone-detection, modality: rgb, note: "DISABLED - mixes shahed with mavic/orlan/lancet" }
