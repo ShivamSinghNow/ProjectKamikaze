@@ -7,7 +7,6 @@ main loop never imports onnxruntime directly.
 from __future__ import annotations
 
 import numpy as np
-
 from kamikaze_common.schemas import Detection
 
 

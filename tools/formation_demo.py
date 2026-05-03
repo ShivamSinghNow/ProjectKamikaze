@@ -18,7 +18,6 @@ import sys
 import time
 
 import numpy as np
-
 from kamikaze_common.envs.swarm import (
     DRONE_IDS,
     INITIAL_XYZS,
@@ -50,7 +49,7 @@ def main() -> int:
 
     print("[formation_demo] opening PyBullet GUI...")
     print(f"[formation_demo] num_drones={NUM_DRONES} | drone_ids={DRONE_IDS}")
-    for drone_id, xyz in zip(DRONE_IDS, INITIAL_XYZS):
+    for drone_id, xyz in zip(DRONE_IDS, INITIAL_XYZS, strict=True):
         print(f"  {drone_id} ({ROLES[drone_id]:>9}) @ {np.round(xyz, 2).tolist()}")
 
     env = SwarmAviary(gui=True, ctrl_freq=args.ctrl_freq, pyb_freq=args.ctrl_freq)
@@ -63,7 +62,7 @@ def main() -> int:
 
     t_start = time.time()
     last_log = t_start
-    for step in range(n_steps):
+    for _step in range(n_steps):
         env.step(hover_rpms)
         # Sleep to keep wall-clock real-time-ish (PyBullet GUI defaults to
         # as-fast-as-possible). 1/ctrl_freq matches sim service.

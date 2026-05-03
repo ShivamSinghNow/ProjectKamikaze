@@ -4,10 +4,9 @@ Per tick:
     state = sim_client.get_state()
     frame = sim_client.get_frame()       # KAM-10 fills with real RGB
     det   = perception_stub.detect(frame)
-    hb    = Heartbeat(...)
-    mesh_stub.broadcast(hb)              # KAM-11 swap target
+    mesh.publish_detection(det)          # when det is present
     POST /heartbeat -> control-plane (re-registers if evicted)
-    cmds  = policy.act(obs, dt)
+    cmds  = policy.act(obs, dt)          # obs.track only on elected interceptor
     sim_client.publish_cmd(cmds)         # sim drives physics with these RPMs
 """
 
@@ -18,14 +17,14 @@ import time
 
 import httpx
 import numpy as np
-
 from kamikaze_common.logging import get_logger
 from kamikaze_common.schemas import Heartbeat, RegisterReq, RegisterResp
 
 from drone_agent import config as cfg_mod
-from drone_agent import mesh_stub, perception_stub
+from drone_agent import perception_stub
 from drone_agent.policies import build as build_policy
 from drone_agent.policy import Observation
+from drone_agent.redis_mesh import RedisGossipMesh
 from drone_agent.sim_client import SimClient
 
 
@@ -88,10 +87,12 @@ def main() -> int:
     log = get_logger("drone", drone_id=cfg.drone_id)
 
     log.info(
-        "booted | role=%s policy=%s | tick=%.1fHz",
+        "booted | role=%s policy=%s | tick=%.1fHz | fusion=%.2f ttl=%.2fs",
         cfg.role,
         cfg.policy,
         cfg.tick_hz,
+        cfg.fusion_conf_threshold,
+        cfg.fusion_ttl_s,
     )
 
     policy = build_policy(cfg)
@@ -110,6 +111,14 @@ def main() -> int:
 
     sim_client = SimClient(cfg.redis_url, cfg.drone_id)
     sim_client.start()
+    mesh = RedisGossipMesh(
+        cfg.redis_url,
+        cfg.drone_id,
+        ttl_s=cfg.fusion_ttl_s,
+        conf_threshold=cfg.fusion_conf_threshold,
+        log=log,
+    )
+    mesh.start()
 
     cp_client = httpx.Client(base_url=cfg.control_plane_url)
     _register(cfg, cp_client, log)
@@ -121,49 +130,61 @@ def main() -> int:
     log_every_n = max(1, int(cfg.tick_hz))  # ~1 log line/sec
     t_start = time.time()
     tick = 0
-    while True:
-        state = sim_client.get_state()
-        frame = sim_client.get_frame()
-        det = perception_stub.detect(frame)
-        t = time.time() - t_start
+    try:
+        while True:
+            state = sim_client.get_state()
+            mesh.set_drone_positions(sim_client.get_drone_positions())
+            frame = sim_client.get_frame()
+            det = perception_stub.detect(frame)
+            now = time.time()
+            t = now - t_start
 
-        hb = Heartbeat(drone_id=cfg.drone_id, t=t, detection=det)
-        mesh_stub.broadcast(hb)
+            hb = Heartbeat(drone_id=cfg.drone_id, t=t, detection=det)
+            if det is not None:
+                world_pos = getattr(det, "world_pos", None)
+                mesh.publish_detection(det, t=now, world_pos=world_pos)
 
-        if not _send_heartbeat(cp_client, hb, log, hb_state):
-            reason = (
-                f"{hb_state.fail_count} consecutive heartbeat failures"
-                if hb_state.fail_count >= _HB_FORCE_REREGISTER_AFTER
-                else "control-plane evicted us"
-            )
-            log.warning("re-registering (%s)", reason)
-            _register(cfg, cp_client, log)
-            hb_state.fail_count = 0
+            if not _send_heartbeat(cp_client, hb, log, hb_state):
+                reason = (
+                    f"{hb_state.fail_count} consecutive heartbeat failures"
+                    if hb_state.fail_count >= _HB_FORCE_REREGISTER_AFTER
+                    else "control-plane evicted us"
+                )
+                log.warning("re-registering (%s)", reason)
+                _register(cfg, cp_client, log)
+                hb_state.fail_count = 0
 
-        if state is not None:
-            drone_state = np.concatenate(
-                [state.pos, state.rpy, state.vel, state.ang_vel]
-            ).astype(np.float32)
-        else:
-            drone_state = np.zeros(12, dtype=np.float32)
+            if state is not None:
+                drone_state = np.concatenate(
+                    [state.pos, state.rpy, state.vel, state.ang_vel]
+                ).astype(np.float32)
+            else:
+                drone_state = np.zeros(12, dtype=np.float32)
 
-        obs = Observation(drone_state=drone_state, track=None)
-        cmds = policy.act(obs, dt)
-        sim_client.publish_cmd(cmds)
+            track = mesh.track_for_policy(cfg.drone_id, now=now)
+            obs = Observation(drone_state=drone_state, track=track)
+            cmds = policy.act(obs, dt)
+            sim_client.publish_cmd(cmds)
 
-        if tick % log_every_n == 0:
-            pos_str = f"[{state.pos[0]:.2f}, {state.pos[1]:.2f}, {state.pos[2]:.2f}]" if state else "?"
-            log.info(
-                "tick=%d t=%.1fs | pos=%s | det=%s | sim_rx=%d",
-                tick,
-                t,
-                pos_str,
-                det,
-                sim_client.payload_count,
-            )
+            if tick % log_every_n == 0:
+                pos_str = f"[{state.pos[0]:.2f}, {state.pos[1]:.2f}, {state.pos[2]:.2f}]" if state else "?"
+                track_id = track.id if track is not None else None
+                log.info(
+                    "tick=%d t=%.1fs | pos=%s | det=%s | policy_track=%s | sim_rx=%d",
+                    tick,
+                    t,
+                    pos_str,
+                    det,
+                    track_id,
+                    sim_client.payload_count,
+                )
 
-        tick += 1
-        time.sleep(dt)
+            tick += 1
+            time.sleep(dt)
+    finally:
+        mesh.stop()
+        sim_client.stop()
+        cp_client.close()
 
 
 if __name__ == "__main__":

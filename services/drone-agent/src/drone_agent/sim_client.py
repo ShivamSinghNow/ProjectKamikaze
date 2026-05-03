@@ -10,11 +10,11 @@ perception_stub keeps working unchanged.
 from __future__ import annotations
 
 import threading
+from contextlib import suppress
 from dataclasses import dataclass
 
 import numpy as np
 import redis
-
 from kamikaze_common.logging import get_logger
 from kamikaze_common.redis_io import (
     WORLD_STATE_CHANNEL,
@@ -54,10 +54,8 @@ class SimClient:
 
     def stop(self) -> None:
         self._stop.set()
-        try:
+        with suppress(Exception):
             self._pubsub.close()
-        except Exception:
-            pass
 
     @property
     def payload_count(self) -> int:
@@ -80,6 +78,18 @@ class SimClient:
                     ang_vel=np.asarray(d["ang_vel"], dtype=np.float32),
                 )
         return None
+
+    def get_drone_positions(self) -> dict[str, tuple[float, float, float]]:
+        """Return latest live drone positions keyed by drone id."""
+        with self._lock:
+            payload = self._latest_payload
+        if payload is None:
+            return {}
+        return {
+            str(d["id"]): tuple(float(v) for v in d["pos"])
+            for d in payload["drones"]
+            if "id" in d and "pos" in d
+        }
 
     def get_frame(self) -> np.ndarray:
         """Black placeholder until KAM-10 extends world:state with frames."""

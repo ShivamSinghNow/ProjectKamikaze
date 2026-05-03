@@ -13,7 +13,6 @@ import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-
 from kamikaze_common.logging import get_logger
 from kamikaze_common.schemas import Heartbeat, RegisterReq, RegisterResp, RosterResp
 

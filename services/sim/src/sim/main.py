@@ -14,10 +14,10 @@ import sys
 import threading
 import time
 from collections import defaultdict
+from contextlib import suppress
 
 import numpy as np
 import redis
-
 from kamikaze_common.envs.swarm import DRONE_IDS, NUM_DRONES, SwarmAviary
 from kamikaze_common.logging import get_logger
 from kamikaze_common.redis_io import (
@@ -49,10 +49,8 @@ class CmdListener:
 
     def stop(self) -> None:
         self._stop.set()
-        try:
+        with suppress(Exception):
             self._pubsub.close()
-        except Exception:
-            pass
 
     def latest(self) -> dict[str, np.ndarray]:
         with self._lock:
@@ -151,10 +149,8 @@ def main() -> int:
         return 0
     finally:
         listener.stop()
-        try:
+        with suppress(Exception):
             env.close()
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":
