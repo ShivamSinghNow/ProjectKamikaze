@@ -5,7 +5,7 @@ Each entry is loaded lazily so the `noop` path never imports torch.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from drone_agent.config import DroneConfig
 from drone_agent.policy import Policy

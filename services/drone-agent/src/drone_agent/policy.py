@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Protocol
 
 import numpy as np
-
 from kamikaze_common.schemas import Track
 
 

@@ -30,6 +30,8 @@ x-drone-base: &drone-base
     PPO_CHECKPOINT: /models/intercept_ppo.zip
     LOG_LEVEL: ${LOG_LEVEL:-INFO}
     TICK_HZ: "30.0"                    # match SIM_TICK_HZ for stable hover
+    FUSION_CONF_THRESHOLD: ${FUSION_CONF_THRESHOLD:-0.9}
+    FUSION_TTL_S: ${FUSION_TTL_S:-1.0}
 
 services:
   redis:

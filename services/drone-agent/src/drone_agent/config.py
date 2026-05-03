@@ -17,6 +17,8 @@ class DroneConfig:
     ppo_checkpoint: str
     log_level: str
     tick_hz: float
+    fusion_conf_threshold: float
+    fusion_ttl_s: float
 
 
 def load() -> DroneConfig:
@@ -37,4 +39,6 @@ def load() -> DroneConfig:
         ppo_checkpoint=os.environ.get("PPO_CHECKPOINT", "/models/intercept_ppo.zip"),
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
         tick_hz=float(os.environ.get("TICK_HZ", "30.0")),
+        fusion_conf_threshold=float(os.environ.get("FUSION_CONF_THRESHOLD", "0.9")),
+        fusion_ttl_s=float(os.environ.get("FUSION_TTL_S", "1.0")),
     )

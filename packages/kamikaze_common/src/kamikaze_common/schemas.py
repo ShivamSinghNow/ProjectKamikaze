@@ -19,6 +19,17 @@ class Detection(BaseModel):
     class_id: int
 
 
+class DetectionEvent(BaseModel):
+    """Compact per-drone detection gossip payload."""
+
+    drone_id: str
+    t: float
+    class_id: int
+    conf: float = Field(ge=0.0, le=1.0)
+    bbox: BBox
+    world_pos: tuple[float, float, float] | None = None
+
+
 class Track(BaseModel):
     """A fused detection consensus across the swarm. KAM-11 produces these.
 
@@ -34,7 +45,8 @@ class Track(BaseModel):
     world_pos: tuple[float, float, float] | None = None  # for KAM-9 obs + interceptor election
     world_vel: tuple[float, float, float] | None = None  # closing-velocity reward (KAM-9)
     t: float  # last-seen wall-clock seconds since epoch
-    seen_by: list[str] = []  # drone IDs that contributed to fusion
+    seen_by: list[str] = Field(default_factory=list)  # drone IDs that contributed to fusion
+    interceptor_id: str | None = None
 
 
 class RegisterReq(BaseModel):

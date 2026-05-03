@@ -54,6 +54,24 @@ Each `drone-agent` container subscribes to `world:state`, extracts its own pose,
 
 Channel/payload definitions live in `packages/kamikaze_common/redis_io.py` so the sim and the drone-agent can never drift on protocol.
 
+## Redis gossip mesh + consensus fusion (KAM-11)
+
+KAM-11 uses Redis pub/sub for swarm gossip because Redis is already required by
+the sim dataplane. Each drone publishes compact msgpack detections on
+`detections:gossip` with short keys (`d`, `t`, `c`, `f`, `b`, optional `w`) for
+drone id, timestamp, class id, confidence, bbox, and world position. Each drone
+subscribes to the same channel, keeps the latest detection per
+`(track_id, drone_id)` for `FUSION_TTL_S`, and fuses confidence as
+`1 - product(1 - conf)` across unique drones.
+
+For this pass, `track_id` is `class:{class_id}`. Once fused confidence reaches
+`FUSION_CONF_THRESHOLD` (default `0.9`), the mesh elects an interceptor and
+publishes the fused `Track` on `tracks:fused`. If the track has `world_pos`, the
+nearest live drone wins with drone id as a deterministic tie-breaker; otherwise
+the highest-confidence contributing drone wins, again tie-broken by drone id.
+Only the elected drone receives `obs.track` in its policy input; other drones
+continue normal hover/observe behavior.
+
 ## Tickets
 
 - KAM-5  scaffold (PR #1)
